@@ -1,146 +1,207 @@
-# Descargador de Álbumes de Telegram
+# Descargador de Álbumes y Medios de Telegram
 
 ## Descripción
-Este proyecto es una herramienta de línea de comandos escrita en Python que permite descargar álbumes y medios de chats de Telegram. Organiza los archivos descargados en carpetas basadas en los mensajes o sus captions, con soporte para filtrado por tipo de medio y fechas. Utiliza la biblioteca **Telethon** para interactuar con la API de Telegram y **tqdm** para mostrar una barra de progreso.
+
+Herramienta de línea de comandos en Python para descargar álbumes y medios de chats de Telegram, organizando los archivos descargados en carpetas simples (estructura plana por defecto) o mensuales (con `--structure monthly` si lo prefieres). Permite filtrar por tipo de medio y fechas, evita duplicados y soporta descargas concurrentes configurables. Utiliza **Telethon** para interactuar con la API de Telegram y **tqdm** para barra de progreso.
 
 ## Características
+
 - Descarga fotos, videos, GIFs, audios, stickers y documentos de chats de Telegram.
-- Organiza los medios en carpetas basadas en el caption del mensaje o la fecha.
-- Soporta filtrado por tipo de medio y rango de fechas.
+- Organización de archivos en estructura plana (**flat**, por defecto) o mensual (`--structure monthly`).
+- Extensiones de archivo correctas (evita `.bin` salvo casos excepcionales).
+- Filtros por tipo de medio y rango de fechas.
 - Evita descargas duplicadas mediante un archivo de historial (`seen.json`).
-- Manejo de concurrencia para descargas más rápidas con un límite de 5 descargas simultáneas.
+- Manejo de concurrencia configurable con `--concurrent` (por defecto 5; recomendado 4-8).
+- Descarga mensajes de solo texto si se indica con `--download-text`.
 - Registro detallado de las operaciones en la consola.
 - Interfaz interactiva para seleccionar chats si no se especifica un ID.
 
+---
+
+## Estructura del proyecto
+
+```bash
+telegram-album-downloader/
+├── .env.example
+├── requirements.txt
+├── init_session.py
+├── download_media.py
+└── downloads/           # Carpeta de salida
+```
+
+---
+
 ## Requisitos
-- Python 3.8 o superior.
-- Bibliotecas de Python:
-  - `telethon`
-  - `tqdm`
-- Credenciales de API de Telegram (`api_id` y `api_hash`). Obtén las tuyas en [my.telegram.org](https://my.telegram.org).
+
+- **Python 3.8+**
+- **Credenciales de Telegram:** Consigue tu `api_id` y `api_hash` desde [my.telegram.org](https://my.telegram.org).
+- **Entorno virtual** (recomendado).
+- **Dependencias**:
+  ```
+  telethon>=1.30.0
+  tqdm>=4.64.0
+  python-dotenv>=0.21.0
+  ```
+
+---
 
 ## Instalación
+
 1. Clona el repositorio:
    ```bash
    git clone https://github.com/enmamosley/Telegram-Media-Downloader.git
-   cd tu_repositorio
+   cd telegram-media-downloader
    ```
-2. Instala las dependencias:
+2. Crea y activa un entorno virtual:
    ```bash
-   pip install telethon tqdm
+   python -m venv .venv
+   # Windows PowerShell:
+   .\.venv\Scripts\Activate.ps1
+   # Windows CMD:
+   .\.venv\Scripts\activate.bat
+   # Unix/macOS:
+   source .venv/bin/activate
    ```
-3. Configura tus credenciales de API en el código:
-   - Edita las variables `api_id` y `api_hash` en el archivo principal con tus credenciales de Telegram.
-
-## ✅ Obtener API ID y Hash
-
-Para usar la API de Telegram necesitas tus propias credenciales:
-
-1. Ve a [https://my.telegram.org](https://my.telegram.org)
-2. Inicia sesión con tu número de teléfono.
-3. Crea una nueva aplicación.
-4. Obtén tu API ID y API Hash.
-5. Guarda esos datos para configurarlos en los scripts.
+3. Instala dependencias:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Configura tus credenciales:
+   ```bash
+   cp .env.example .env
+   # Edita .env con tus datos reales
+   ```
 
 ---
 
-## ✅ Archivos del proyecto
+## Configuración de entorno
 
-```bash
-.
-├── init_session.py       # Primer paso: inicializar y guardar tus chats
-├── download_media.py     # Segundo paso: descargar mensajes y medios
-└── README.md             # Documentación del proyecto
+Ejemplo `.env.example`:
+
+```dotenv
+TELEGRAM_API_ID=1234567
+TELEGRAM_API_HASH=abcdef1234567890abcdef1234567890
+SESSION_NAME=mysession
+OUTPUT_FOLDER=downloads
 ```
 
 ---
 
-## ✅ Configuración
+## Scripts
 
-En ambos scripts encontrarás estas variables al inicio:
+### 1️⃣ `init_session.py`
 
-```python
-api_id = TU_API_ID
-api_hash = 'TU_API_HASH'
-session_name = 'mysession'
-```
-
-✏️ Debes reemplazarlas con tus datos reales.
-
-Por ejemplo:
-
-```python
-api_id = 123456
-api_hash = 'abcdef1234567890abcdef1234567890'
-```
-
----
-
-## ✅ Uso recomendado
-
-⚡ **¿Por qué hay dos scripts?**
-
-Usar Telethon por primera vez requiere guardar tu sesión (archivo `.session`) para que los chats y canales estén disponibles localmente. Por eso recomendamos este flujo:
-
-### 1️⃣ Inicializar sesión
-
-✅ Este paso se hace solo la primera vez (o si borras el archivo de sesión).
+*Ejecuta sólo la primera vez para guardar tu sesión:*
 
 ```bash
 python init_session.py
 ```
 
-✔️ **Qué hace:**
+Ingresa tu número de teléfono con código de país y el código de verificación recibido. La sesión queda guardada para futuros usos.
 
-- Inicia sesión en tu cuenta (te pedirá el código de Telegram si es la primera vez).
-- Recorre todos tus chats, grupos y canales.
-- Los guarda en la sesión (`mysession.session`) para usarlos después.
+---
 
-✅ **Ventajas:**
+### 2️⃣ `download_media.py`
 
-- Evita errores como «entidad no encontrada».
-- Reduce consultas futuras a la API de Telegram.
+*Descarga medios de un chat específico o seleccionando uno de tus chats:*
 
-### 2️⃣ Descargar contenidos
-
-✅ Una vez tengas la sesión creada, puedes usar el segundo script:
-1. Ejecuta el script:
-   ```bash
-   python script.py
-   ```
-2. Si no especificas un `--chat-id`, el script mostrará una lista de tus chats de Telegram y te pedirá que selecciones uno ingresando su número.
-
-### Opciones de línea de comandos
 ```bash
-python script.py --chat-id <ID> --limit <N> --min-date <YYYY-MM-DD> --max-date <YYYY-MM-DD> --media-types <tipo1 tipo2 ...> --reverse
-```
-- `--chat-id`: ID del chat a procesar.
-- `--limit`: Número máximo de mensajes a procesar.
-- `--min-date`: Fecha mínima para los mensajes (formato `YYYY-MM-DD`).
-- `--max-date`: Fecha máxima para los mensajes (formato `YYYY-MM-DD`).
-- `--media-types`: Tipos de medios a descargar (p.ej., `photo video document`).
-- `--reverse`: Procesa los mensajes en orden ascendente (del más antiguo al más reciente).
-
-### Ejemplo
-Descargar fotos y videos de un chat específico, limitando a mensajes de 2023:
-```bash
-python script.py --chat-id 123456789 --limit 1000 --min-date 2023-01-01 --max-date 2023-12-31 --media-types photo video
+python download_media.py --chat-id <ID> [opciones]
 ```
 
-## Estructura de Archivos
-- Los archivos se guardan en la carpeta `downloads/`.
-- Cada álbum se organiza en una subcarpeta nombrada según el caption del mensaje o la fecha.
-- Los captions se guardan en un archivo `text.txt` dentro de la carpeta correspondiente.
-- El archivo `seen.json` registra los IDs de los álbumes procesados para evitar duplicados.
+Si omites `--chat-id`, podrás elegir el chat de manera interactiva.
 
-## Notas
-- Asegúrate de tener una conexión estable a internet.
-- Los archivos existentes no se volverán a descargar.
-- Si usas macOS, el script ajusta automáticamente la política de bucle de eventos para compatibilidad.
-- Los errores durante la descarga se registran en la consola sin interrumpir el proceso.
+#### Opciones principales
+
+| Opción                    | Descripción                                                                            |
+| ------------------------- | -------------------------------------------------------------------------------------- |
+| `--chat-id <ID>`          | ID del chat a procesar                                                                 |
+| `--limit <N>`             | Límite de mensajes a procesar                                                          |
+| `--min-date <YYYY-MM-DD>` | Solo mensajes desde esta fecha                                                         |
+| `--max-date <YYYY-MM-DD>` | Solo mensajes hasta esta fecha                                                         |
+| `--media-types <tipos>`   | Lista de tipos (`photo`, `video`, `gif`, `voice`, `sticker`, `document`)               |
+| `--reverse`               | Orden ascendente (antiguo a reciente)                                                  |
+| `--download-text`         | Descargar mensajes de solo texto (sin media)                                           |
+| `--structure monthly`     | Organiza los archivos en carpetas por año/mes (por defecto es estructura plana/simple) |
+| `--skip-seen`             | Procesa todo, sin saltar mensajes ya vistos                                            |
+| `--concurrent <N>`        | Número de descargas simultáneas (default: 5, recomendado 4-8)                          |
+
+---
+
+#### Ejemplo de uso
+
+Solo fotos y videos del 2024, con 8 hilos de descarga simultáneas:
+
+```bash
+python download_media.py --chat-id 123456789 --media-types photo video --min-date 2024-01-01 --max-date 2024-12-31 --concurrent 8
+```
+
+Solo descarga mensajes de texto (sin media), en estructura mensual:
+
+```bash
+python download_media.py --structure monthly --download-text
+```
+
+---
+
+#### Organización de archivos
+
+**Por defecto (estructura plana/simple):**
+
+```
+downloads/
+  Mi_Caption_12345.jpg    # Individual con caption
+  12346.jpg               # Individual sin caption
+  NC/                     # Álbumes sin caption
+    33456.jpg
+  Mi_Album/
+    5551.jpg
+    5552.mp4
+    text.txt              # Caption grupal
+```
+
+**Con **--structure monthly**:**
+
+```
+downloads/
+  2024-07/
+    individual/
+      Mi_Caption_12345.jpg
+      12346.jpg
+    NC/
+      33456.jpg
+    captions/
+      Mi_Album/
+        5551.jpg
+        5552.mp4
+        text.txt
+```
+
+- **Individuales:** en la raíz (o en carpeta `individual/` si usas `monthly`).
+- **Álbumes con caption:** en carpeta por caption, junto a su `text.txt`.
+- **Álbumes sin caption:** en carpeta `NC/`.
+
+---
+
+## Notas y recomendaciones de rendimiento
+
+- **Concurrencia:** Usa el argumento `--concurrent` para ajustar el número de descargas simultáneas (recomendado entre 4 y 8). Más alto no necesariamente acelera la descarga, y puede ser más lento por límites de Telegram, tu red o disco.
+- **Historial (**``**):** Evita descargar dos veces el mismo mensaje/álbum.
+- **Extensiones seguras:** El script elige la extensión correcta; `.bin` solo si no hay información suficiente.
+- **Barra de progreso:** Usa `tqdm` para feedback visual.
+- **Chats privados/canales:** Algunos pueden ser inaccesibles por permisos; el script solo avisa y sigue.
+- **No descarga mensajes de solo texto a menos que se pida explícitamente (**``**).**
+- **Compatible con macOS y otros sistemas.**
+- **Archivos existentes no se sobrescriben.**
+- **Una imagen o video no comprimida y enviada como archivo, "foto.png" se trata como un documento.**
+
+---
 
 ## Contribuciones
-¡Las contribuciones son bienvenidas! Por favor, abre un *issue* o envía un *pull request* con mejoras o correcciones.
+
+¡Bienvenidas! Abre un issue o PR con mejoras o sugerencias.
 
 ## Licencia
-Este proyecto está bajo la Licencia MIT. Consulta el archivo `LICENSE` para más detalles.
+
+MIT. Consulta `LICENSE` para más detalles.
+
